@@ -1,0 +1,11 @@
+# Réglages propres à la maison : jamais dans le dépôt public
+secrets.h
+*.secret
+*.local.*
+.env
+config.local.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
