@@ -1,7 +1,10 @@
 """Robot simulé : parle le protocole Freenove sur un faux port série (pseudo-terminal).
 
 Le code testé ouvre `robot.port` exactement comme un vrai /dev/ttyACM*, ce qui fait passer
-les tests par le vrai transport série.
+les tests par le vrai transport série. Comme le vrai robot :
+- son chargeur se bloque s'il reçoit un octet trop tôt après l'ouverture ;
+- un ordre de mouvement répond « commencé », dure un moment, puis répond « fini » ;
+- pendant un mouvement, tout ordre reçu est ignoré, sans réponse.
 """
 
 import os
@@ -23,6 +26,8 @@ class RobotSimule:
         tension_malformee: bool = False,
         bruit_au_demarrage: bytes = b"",
         chargeur: float = 0.1,
+        duree_mouvement: float = 0.15,
+        mouvement_sans_fin: bool = False,
     ) -> None:
         self.tension = tension
         self.muet = muet  # ne répond jamais (programme absent, carte plantée)
@@ -33,7 +38,12 @@ class RobotSimule:
         # le bloque, et la carte ne répond plus jamais.
         self.chargeur = chargeur
         self.bloque = False
-        self.recus: list[protocole.Reponse] = []
+        self.duree_mouvement = duree_mouvement
+        self.mouvement_sans_fin = mouvement_sans_fin  # « commencé », puis plus rien
+        self.mode = "repos"
+        self.recus: list[protocole.Reponse] = []  # ordres traités
+        self.ignores: list[protocole.Reponse] = []  # ordres reçus pendant un mouvement
+        self.mouvements: list[protocole.Reponse] = []  # ordres bloquants terminés, dans l'ordre
         self._arret = threading.Event()
 
     def __enter__(self) -> "RobotSimule":
@@ -51,6 +61,10 @@ class RobotSimule:
         os.close(self._maitre)
         os.close(self._esclave)
 
+    def ordres(self) -> list[int]:
+        """Les ordres traités, dans l'ordre de réception."""
+        return [r.ordre for r in self.recus]
+
     def _repondre(self, demande: protocole.Reponse) -> bytes | None:
         if demande.ordre == protocole.DEMANDE_ECHO:
             return protocole.trame(protocole.ECHO)
@@ -65,8 +79,18 @@ class RobotSimule:
         decodeur = protocole.Decodeur()
         debut = time.monotonic()
         bruit_envoye = False
+        en_cours: protocole.Reponse | None = None
+        fin_mouvement = 0.0
         while not self._arret.is_set():
-            pret, _, _ = select.select([self._maitre], [], [], 0.05)
+            if en_cours and not self.mouvement_sans_fin and time.monotonic() >= fin_mouvement:
+                if en_cours.ordre == protocole.MODE_ACTIF:
+                    self.mode = "actif"
+                elif en_cours.ordre == protocole.MODE_REPOS:
+                    self.mode = "repos"
+                self.mouvements.append(en_cours)
+                en_cours = None
+                os.write(self._maitre, protocole.trame(protocole.ORDRE_FINI))
+            pret, _, _ = select.select([self._maitre], [], [], 0.02)
             if not pret:
                 continue
             try:
@@ -81,7 +105,15 @@ class RobotSimule:
                 os.write(self._maitre, self.bruit_au_demarrage)
                 bruit_envoye = True
             for demande in decodeur.ajouter(octets):
+                if en_cours:
+                    self.ignores.append(demande)
+                    continue
                 self.recus.append(demande)
+                if demande.ordre >= 64:  # ordre bloquant
+                    en_cours = demande
+                    fin_mouvement = time.monotonic() + self.duree_mouvement
+                    os.write(self._maitre, protocole.trame(protocole.ORDRE_COMMENCE))
+                    continue
                 reponse = self._repondre(demande)
                 if reponse:
                     os.write(self._maitre, reponse)
