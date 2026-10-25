@@ -18,6 +18,20 @@ TENSION = 11
 ORDRE_COMMENCE = 21
 ORDRE_FINI = 23
 
+# Ordres bloquants : le robot répond ORDRE_COMMENCE, bouge, puis répond ORDRE_FINI.
+# Pendant le mouvement, il ignore tout autre ordre, sans répondre.
+AVANCE = 80  # un cycle de pas
+RECULE = 82
+GAUCHE = 84  # pas de côté
+DROITE = 86
+TOURNE_GAUCHE = 88  # sur place
+TOURNE_DROITE = 90
+MODE_ACTIF = 92  # debout, prêt à bouger
+MODE_REPOS = 94  # couché, économise les batteries
+HAUTEUR = 112  # [64 + hauteur]
+DECALE_CORPS = 114  # [64 + x] [64 + y] [64 + z]
+PENCHE_CORPS = 116  # [64 + x] [64 + y] [64 + z]
+
 
 class ErreurProtocole(Exception):
     """Trame invalide, reçue ou à envoyer."""
@@ -29,6 +43,13 @@ def trame(ordre: int, *donnees: int) -> bytes:
         if not 0 <= valeur <= 127:
             raise ErreurProtocole(f"valeur hors de 0..127 : {valeur}")
     return bytes([DEBUT, ordre, *donnees, FIN])
+
+
+def signe(valeur: int) -> int:
+    """Encode une valeur signée (−64 à 63) dans un octet de données."""
+    if not -64 <= valeur <= 63:
+        raise ErreurProtocole(f"valeur signée hors de −64..63 : {valeur}")
+    return valeur + 64
 
 
 @dataclass(frozen=True)

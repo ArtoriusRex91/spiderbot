@@ -99,6 +99,10 @@ class TransportUSB:
             "programme d'origine absent ?)"
         )
 
+    def recevoir(self, delai: float) -> protocole.Reponse | None:
+        """Prochaine trame reçue dans le délai, sinon None."""
+        return self._recevoir(time.monotonic() + delai)
+
     def demander(self, trame: bytes) -> protocole.Reponse:
         """Envoie une trame et renvoie la première réponse, dans le délai."""
         assert self._serie is not None
