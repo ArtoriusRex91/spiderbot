@@ -1,0 +1,21 @@
+# Modèle de réglages pour la commande spiderbot.
+# À copier dans ~/.config/spiderbot/config.toml et à adapter. Toutes les lignes sont
+# facultatives : sans fichier, ce sont ces valeurs par défaut qui s'appliquent.
+
+[robot]
+# Liaison avec le robot : "usb" (le wifi viendra plus tard)
+transport = "usb"
+
+# Port série du robot. "auto" : la carte Mega 2560 est cherchée par son identifiant USB,
+# quel que soit son nom (/dev/ttyACM0, /dev/ttyACM1…).
+port_usb = "auto"
+
+# Attente maximale d'une réponse du robot, en secondes (5 au plus).
+delai = 5.0
+
+[batterie]
+# Seuils pour deux éléments lithium-ion en série.
+# Au-dessus de seuil_ok : « ok ». Entre les deux : « à recharger bientôt ».
+# En dessous de seuil_faible : « trop faible ».
+seuil_ok = 7.2
+seuil_faible = 6.8
